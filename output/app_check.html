@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campus Customs App Check</title>
+<style>
+  :root {
+    --blue: #00356B;
+    --mid: #286DC0;
+    --ink: #222222;
+    --gray: #4A4A4A;
+    --line: #DDDDDD;
+    --paper: #FFFFFF;
+    --page: #F9F9F9;
+    --green: #5F712D;
+    --orange: #BD5319;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 17px/1.6 Georgia, "Times New Roman", serif;
+  }
+  header {
+    background: var(--blue);
+    color: #fff;
+    padding: 32px 16px 28px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { padding: 0; max-width: 828px; }
+  h1 { margin: 0 0 6px; font-size: 32px; line-height: 1.2; }
+  header p { margin: 0; color: #cfe0f5; font: 15px/1.5 system-ui, sans-serif; }
+  h2 { color: var(--blue); font-size: 24px; line-height: 1.25; margin: 0 0 4px; }
+  .result {
+    display: inline-block;
+    font: 600 13px/1 system-ui, sans-serif;
+    padding: 5px 9px;
+    border-radius: 4px;
+    margin: 6px 0 14px;
+  }
+  .pass { background: #e9efdc; color: var(--green); }
+  .fixed { background: #f6e3d8; color: var(--orange); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    font: 15px/1.45 system-ui, sans-serif;
+    margin: 28px 0 8px;
+  }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  th { background: #eef3f9; color: var(--blue); }
+  td a { color: var(--mid); }
+  section {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--blue);
+    padding: 24px;
+    margin: 28px 0;
+  }
+  figure { margin: 18px 0; }
+  figure img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+  }
+  figcaption { font: 14px/1.5 system-ui, sans-serif; color: var(--gray); margin-top: 8px; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .shots figure { margin: 0; }
+  dl { margin: 18px 0 0; font: 16px/1.55 system-ui, sans-serif; }
+  dt { font-weight: 700; color: var(--blue); }
+  dd { margin: 0 0 10px; }
+  .bug {
+    border-left: 4px solid var(--orange);
+    background: #fdf6f2;
+    padding: 14px 16px;
+    margin-top: 18px;
+    font: 15px/1.55 system-ui, sans-serif;
+  }
+  .bug h3 { margin: 0 0 6px; color: var(--orange); font-size: 17px; }
+  .bug p { margin: 0 0 8px; }
+  code, pre { font: 13px/1.5 Consolas, "Courier New", monospace; }
+  pre { background: #f3f3f3; padding: 10px 12px; overflow-x: auto; margin: 8px 0; white-space: pre-wrap; }
+  footer { color: var(--gray); font: 14px/1.5 system-ui, sans-serif; padding: 8px 0 40px; }
+  @media (max-width: 640px) {
+    .shots { grid-template-columns: 1fr; }
+    section { padding: 16px; }
+    h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Campus Customs: app check</h1>
+    <p>Problem 11 · Live site tested on Sunday, October 18, 2026 at http://localhost:5173 with the real AI assistant (gpt-6-luna via Portkey) and the real database (data/campus_customs.db).</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Screenshots</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a href="#check-1">1. Chat checks an item's inventory level</a></td>
+        <td>Pass. Chat stock and price match the database.</td>
+        <td><a href="app_check_images/inventory.png">inventory.png</a>, <a href="app_check_images/inventory_database.png">inventory_database.png</a></td>
+      </tr>
+      <tr>
+        <td><a href="#check-2">2. Search-result cards after a category question</a></td>
+        <td>Pass after a fix. The test found a bug, which was fixed and retested.</td>
+        <td><a href="app_check_images/search_cards_chat.png">search_cards_chat.png</a>, <a href="app_check_images/search_cards.png">search_cards.png</a></td>
+      </tr>
+      <tr>
+        <td><a href="#check-3">3. Problem 9 usability feature: faceted search</a></td>
+        <td>Pass. Filters narrow the products and the counts update.</td>
+        <td><a href="app_check_images/usability_filters.png">usability_filters.png</a>, <a href="app_check_images/usability_filters_result.png">usability_filters_result.png</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section id="check-1">
+    <h2>Check 1: Chat checks an item's inventory level</h2>
+    <span class="result pass">Pass</span>
+    <div class="shots">
+      <figure>
+        <a href="app_check_images/inventory.png"><img src="app_check_images/inventory.png" alt="Chat answering stock questions about the Basic Hoodie Big Yale"></a>
+        <figcaption>The chat on the live site. Click any screenshot to see it full size.</figcaption>
+      </figure>
+      <figure>
+        <a href="app_check_images/inventory_database.png"><img src="app_check_images/inventory_database.png" alt="Stock endpoint JSON for basic-hoodie-big-yale"></a>
+        <figcaption>The same item read straight from the database.</figcaption>
+      </figure>
+    </div>
+    <dl>
+      <dt>What the screenshots show</dt>
+      <dd>A shopper asks the chat about the Basic Hoodie Big Yale and it answers 59 in stock at $68.00 with 2 left in XL, the same numbers the database shows (price 68, XL quantity 2, total stock 59).</dd>
+      <dt>What it proves</dt>
+      <dd>The chat reports honest stock and price, by size, read from the database through its stock tool rather than made up, and the automatic fact check logged both replies as passed (backend/logs/checks.jsonl).</dd>
+    </dl>
+  </section>
+
+  <section id="check-2">
+    <h2>Check 2: Search-result cards after a category question</h2>
+    <span class="result fixed">Pass after a fix</span>
+    <div class="shots">
+      <figure>
+        <a href="app_check_images/search_cards_chat.png"><img src="app_check_images/search_cards_chat.png" alt="Chat answering What hoodies do you have"></a>
+        <figcaption>The chat answer to "What hoodies do you have?"</figcaption>
+      </figure>
+      <figure>
+        <a href="app_check_images/search_cards.png"><img src="app_check_images/search_cards.png" alt="Hoodie result cards on the Products page"></a>
+        <figcaption>The result cards on the page itself.</figcaption>
+      </figure>
+    </div>
+    <dl>
+      <dt>What the screenshots show</dt>
+      <dd>On the Products page, a shopper asks the chat "What hoodies do you have?" and 8 hoodie cards, each with photo, name, price and a short description, appear on the main page under "Matches from our chat" (the chat also lists them with sizes in stock).</dd>
+      <dt>What it proves</dt>
+      <dd>A category question in the chat updates the page with live search-result cards built from the catalogue and inventory tables, so shoppers see matches without leaving the page.</dd>
+    </dl>
+    <div class="bug">
+      <h3>Bug found by this check, then fixed</h3>
+      <p>The first time this question was asked, the chat replied that it was "having trouble pulling up our hoodie matches" and no cards appeared. The search log showed the AI searched for the word "hoodies", and the search only matched exact words, while every product name says "Hoodie":</p>
+<pre>search 4821cff28915  search_products {"query": "hoodies", "garment_type": "hoodie"}  → products_found: 0
+search 2e0d6e46d2fb  search_products {"query": "hoodies", "garment_type": "hoodie"}  → products_found: 8   (after the fix)</pre>
+      <p>The fix in backend/tools.py makes plural words match their singular ("hoodies" finds "Hoodie", "crewnecks" finds "Crewneck"). The new test backend/tests/test_app_check.py replays the exact failing search, and all 44 backend tests pass.</p>
+    </div>
+  </section>
+
+  <section id="check-3">
+    <h2>Check 3: Problem 9 usability feature, faceted search</h2>
+    <span class="result pass">Pass</span>
+    <div class="shots">
+      <figure>
+        <a href="app_check_images/usability_filters.png"><img src="app_check_images/usability_filters.png" alt="Products page with Hoodies, Over $70 and size XS filters selected"></a>
+        <figcaption>The filters, with Hoodies, Over $70 and XS selected.</figcaption>
+      </figure>
+      <figure>
+        <a href="app_check_images/usability_filters_result.png"><img src="app_check_images/usability_filters_result.png" alt="One matching product: Champion Full Zip Hood, $88.00"></a>
+        <figcaption>The result below the filters.</figcaption>
+      </figure>
+    </div>
+    <dl>
+      <dt>What the screenshots show</dt>
+      <dd>On the Products page, a shopper picks Hoodies (27 items), checks Over $70 and picks size XS, and the page narrows to 1 item, the Champion Full Zip Hood at $88.00, while every button and checkbox updates its count to match.</dd>
+      <dt>What it proves</dt>
+      <dd>The Problem 9 faceted search works on the live site: shoppers can narrow 102 products to exactly what they want in three clicks, using plain-language filters for category, price and size that count only sizes actually in stock.</dd>
+    </dl>
+  </section>
+
+  <footer>
+    To run the automatic checks yourself: <code>cd backend</code> then <code>.\.venv\Scripts\python.exe -m pytest tests -q</code>. Screenshots are in <code>output/app_check_images/</code>.
+  </footer>
+</main>
+</body>
+</html>
