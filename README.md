@@ -91,6 +91,10 @@ The tests use a temporary copy of the database and a stand-in AI model, so they 
 change your data. The live AI tests in `tests/test_agent_prompt.py` are skipped unless you set
 `RUN_LIVE_AGENT_TESTS=1`.
 
+**Password reset emails:** after 3 wrong passwords (or "Forgot password?") a reset link is emailed to the
+address on file. Without SMTP settings in `backend/.env` the email is saved to `backend/logs/outbox/`
+instead, so you can open the `.eml` file and click the link. See `output/harness.md`, "Problem 4".
+
 ## What's where
 
 | Path | What it is |

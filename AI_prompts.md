@@ -65,6 +65,11 @@ Evidence for this assignment is the running site, database writes, and screensho
 **Prompt:**
 > build a create-account/loginflow, the create account file needs to require the following: first name, last name, email address, password, confirm password. the password and confirm password must match. then build a log in tab.  this will include email address and password to sign in to get into their accoun.t  once the account is created, it should take them to the login page
 
+**Follow-up prompt:**
+> problem 4: store the user name and password. do not show the password.  put a "show password" icon in place that the customer can click on.  do not prefill or populate the password field. do not let the user name or password out of output/harness.md.  Prompt the customer to change the password after 3 failed attempts. send them a reset password link to their email account that is on file.
+
+**What was lacking after the first:** Log-in used a different hash setting than the seeded users, so the seeded test user couldn't log in, there was no show-password icon or reset after failed tries, and `output/harness.md` didn't explain how auth works.
+
 ---
 
 ## Problem 5: PydanticAI agent backend
