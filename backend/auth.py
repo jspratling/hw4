@@ -1,11 +1,13 @@
-"""Create-account and log-in endpoints backed by the users table.
+"""Create-account, log-in and password-reset endpoints backed by the users table.
 
-Passwords are never stored in plain text. New accounts are hashed as
-"pbkdf2_sha256$<iterations>$<salt>$<hex digest>" with a random 16-byte salt
-and 600,000 iterations (OWASP's recommendation for PBKDF2-SHA256), so a
-leaked database can't be reversed into passwords. The seed users in
-campus_customs.db use an older "pbkdf2_sha256$<salt>$<hex digest>" format,
-which is still accepted at log-in.
+Passwords are never stored in plain text. Every account (the seeded users and
+new sign-ups) uses the same settings: PBKDF2-HMAC-SHA256, 120,000 iterations,
+a random salt, stored as "pbkdf2_sha256$<salt>$<hex digest>". Log-in reads the
+salt from the stored string, re-hashes what the shopper typed with that salt
+and compares the two with a constant-time compare.
+
+After 3 failed log-ins for the same email the shopper is prompted to change
+their password and a reset link is sent to the email on file (see mailer.py).
 
 Logged-in shoppers get a signed session token: "<user_id>.<expiry>.<signature>".
 """
@@ -21,11 +23,13 @@ import time
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, field_validator
 
+import mailer
 from db import get_db
 
-PBKDF2_ITERATIONS = 600_000
-# Iteration count assumed for seed users stored in the older 3-part format.
-LEGACY_ITERATIONS = 100_000
+# Same settings as the seeded users in campus_customs.db (from the assignment).
+PBKDF2_ITERATIONS = 120_000
+MAX_FAILED_LOGINS = 3
+RESET_LINK_MINUTES = 30
 MIN_PASSWORD_LENGTH = 8
 SESSION_SECONDS = 7 * 24 * 60 * 60
 # Set SESSION_SECRET in the environment to keep sessions valid across restarts.
@@ -43,24 +47,30 @@ def _pbkdf2(password: str, salt: str, iterations: int) -> str:
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
+    salt = secrets.token_hex(8)
     digest = _pbkdf2(password, salt, PBKDF2_ITERATIONS)
-    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${digest}"
+    return f"pbkdf2_sha256${salt}${digest}"
 
 
 def verify_password(password: str, stored: str) -> bool:
     parts = stored.split("$")
     if parts[0] != "pbkdf2_sha256":
         return False
-    if len(parts) == 4 and parts[1].isdigit():
+    if len(parts) == 3:  # the standard format: pbkdf2_sha256$salt$hash
+        _, salt, expected = parts
+        digest = _pbkdf2(password, salt, PBKDF2_ITERATIONS)
+    elif len(parts) == 4 and parts[1].isdigit():
+        # Two test accounts were made by an earlier version that stored the iteration
+        # count. They still log in, and are re-saved in the standard format (see login).
         _, iterations, salt, expected = parts
         digest = _pbkdf2(password, salt, int(iterations))
-    elif len(parts) == 3:
-        _, salt, expected = parts
-        digest = _pbkdf2(password, salt, LEGACY_ITERATIONS)
     else:
         return False
     return hmac.compare_digest(digest, expected)
+
+
+def needs_rehash(stored: str) -> bool:
+    return len(stored.split("$")) != 3
 
 
 _DUMMY_HASH = hash_password(secrets.token_hex(16))
@@ -189,17 +199,135 @@ def register(body: RegisterRequest) -> UserOut:
 
 @router.post("/login")
 def login(body: LoginRequest) -> LoginResponse:
+    email = body.email.strip().lower()
     with get_db() as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE lower(email) = ?", (body.email.strip().lower(),)
-        ).fetchone()
+        init_auth_tables(conn)
+        row = conn.execute("SELECT * FROM users WHERE lower(email) = ?", (email,)).fetchone()
     # Hash even when the email is unknown so response timing doesn't reveal
     # which emails have accounts.
     stored = row["password_hash"] if row else _DUMMY_HASH
     if not verify_password(body.password, stored) or row is None:
+        if _record_failure(email):
+            # Third miss: prompt a password change and email a reset link. The message is
+            # the same whether or not the email has an account, so it can't be used to
+            # find out who shops here.
+            if row is not None:
+                _send_reset_link(row)
+            raise HTTPException(
+                status_code=401,
+                detail=("That's 3 incorrect tries. For your security, please change your "
+                        "password. If an account uses this email, we've sent a password "
+                        "reset link to the email address on file."),
+                headers={"X-Password-Reset": "prompt"},
+            )
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
+    with get_db() as conn:
+        conn.execute("DELETE FROM login_failures WHERE email = ?", (email,))
+        if needs_rehash(stored):
+            conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                         (hash_password(body.password), row["id"]))
     return LoginResponse(token=create_token(row["id"]), user=user_out(row),
                          last_viewed_product_id=_last_viewed(row["id"]))
+
+
+# ---------- Failed log-ins and password reset ----------
+
+def init_auth_tables(conn: sqlite3.Connection) -> None:
+    """Tables for failed log-in counts and reset links. Neither one stores a password."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS login_failures (
+            email TEXT PRIMARY KEY,
+            count INTEGER NOT NULL,
+            last_failed_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            used_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""")
+
+
+def _record_failure(email: str) -> bool:
+    """Count a failed log-in. Returns True on the 3rd miss (and starts the count again)."""
+    with get_db() as conn:
+        init_auth_tables(conn)
+        conn.execute(
+            "INSERT INTO login_failures (email, count) VALUES (?, 1) "
+            "ON CONFLICT(email) DO UPDATE SET count = count + 1, last_failed_at = datetime('now')",
+            (email,))
+        count = conn.execute("SELECT count FROM login_failures WHERE email = ?", (email,)).fetchone()[0]
+        if count >= MAX_FAILED_LOGINS:
+            conn.execute("DELETE FROM login_failures WHERE email = ?", (email,))
+            return True
+    return False
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _send_reset_link(row: sqlite3.Row) -> None:
+    """Make a one-time link that works for 30 minutes and email it to the address on file.
+
+    Only a hash of the link's token is saved, so a leaked database can't be used to
+    reset anyone's password.
+    """
+    token = secrets.token_urlsafe(32)
+    with get_db() as conn:
+        init_auth_tables(conn)
+        conn.execute("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+                     (row["id"], _token_hash(token), int(time.time()) + RESET_LINK_MINUTES * 60))
+    mailer.send_password_reset(row["email"], user_out(row).first_name, token, RESET_LINK_MINUTES)
+
+
+class ResetRequest(BaseModel):
+    email: str
+
+
+class ResetConfirm(BaseModel):
+    token: str
+    password: str
+    confirm_password: str
+
+
+@router.post("/password-reset/request")
+def request_password_reset(body: ResetRequest) -> dict:
+    """'Forgot password?' on the log-in page. Same answer whether or not the email has an account."""
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE lower(email) = ?",
+                           (body.email.strip().lower(),)).fetchone()
+    if row is not None:
+        _send_reset_link(row)
+    return {"message": "If an account uses this email, we've sent a password reset link to it."}
+
+
+@router.post("/password-reset/confirm")
+def confirm_password_reset(body: ResetConfirm) -> dict:
+    if body.password != body.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match.")
+    if len(body.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400,
+                            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+    with get_db() as conn:
+        init_auth_tables(conn)
+        reset = conn.execute(
+            "SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?",
+            (_token_hash(body.token), int(time.time()))).fetchone()
+        if reset is None:
+            raise HTTPException(status_code=400,
+                                detail="This reset link is invalid or has expired. Please ask for a new one.")
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                     (hash_password(body.password), reset["user_id"]))
+        # Use up this link and any other open links for the same account.
+        conn.execute("UPDATE password_resets SET used_at = datetime('now') "
+                     "WHERE user_id = ? AND used_at IS NULL", (reset["user_id"],))
+        email = conn.execute("SELECT email FROM users WHERE id = ?", (reset["user_id"],)).fetchone()[0]
+        conn.execute("DELETE FROM login_failures WHERE email = ?", (email.lower(),))
+    return {"message": "Your password has been changed. You can log in now."}
 
 
 def _last_viewed(user_id: int) -> str | None:
