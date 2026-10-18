@@ -38,6 +38,15 @@ function writeToken(token: string | null) {
   }
 }
 
+/** A failed log-in. `resetPrompt` is true after 3 misses: the shopper should change their password. */
+export class LoginError extends Error {
+  resetPrompt: boolean
+  constructor(message: string, resetPrompt: boolean) {
+    super(message)
+    this.resetPrompt = resetPrompt
+  }
+}
+
 /** Turns a FastAPI error response into a readable message. */
 export async function errorMessage(res: Response): Promise<string> {
   try {
@@ -77,7 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     })
-    if (!res.ok) throw new Error(await errorMessage(res))
+    if (!res.ok) {
+      throw new LoginError(await errorMessage(res), res.headers.get('X-Password-Reset') === 'prompt')
+    }
     const data: { token: string; user: User; last_viewed_product_id: string | null } = await res.json()
     writeToken(data.token)
     setToken(data.token)

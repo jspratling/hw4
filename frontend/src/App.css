@@ -1409,3 +1409,57 @@
     transition: none;
   }
 }
+
+/* ---------- Password fields: show/hide eye button (Problem 4) ---------- */
+
+.password-field {
+  position: relative;
+  display: flex;
+}
+
+.password-field input {
+  flex: 1;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: #eef1f6;
+  color: #0f2c5c;
+}
+
+.form-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reset-prompt {
+  margin: 0;
+  color: #6b4500;
+  background: #fff6e0;
+  border: 1px solid #f0d48a;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.reset-prompt p {
+  margin: 0 0 8px;
+}
