@@ -130,6 +130,8 @@ Vite dev server ── proxy in frontend/vite.config.ts ──►  FastAPI (127.
 | Create account | `POST /api/register` | `register` in `auth.py` | writes a row to `users` |
 | Log in | `POST /api/login` | `login` in `auth.py` | checks `users.password_hash`, returns a session token |
 | Stay logged in / "Hi, name" | `GET /api/me` (with `Authorization: Bearer <token>`) | `me` in `auth.py` | `users` |
+| Forgot password | `POST /api/password-reset/request` with `{email}` | `request_password_reset` in `auth.py` | `users`, writes `password_resets`, sends the email |
+| Choose a new password (link in the email) | `POST /api/password-reset/confirm` with `{token, password, confirm_password}` | `confirm_password_reset` in `auth.py` | updates `users.password_hash` |
 | Chat widget | `POST /api/chat` with `{message, history}` | `chat` in `main.py` | agent tools read `catalogue` + `inventory` |
 
 The chat reply comes back as `{reply, follow_up_question, products}`. The `products` cards are built from
@@ -169,6 +171,71 @@ npm install
 ```
 
 ---
+
+# Problem 4: How log-in works
+
+No real email addresses or passwords are written in this file, in the code comments or in GitHub.
+The only passwords in the tests belong to made-up test accounts that exist in a temporary copy of
+the database.
+
+## What is stored for each user
+
+| Stored in `users` | What it holds |
+|---|---|
+| `first_name`, `last_name`, `name` | The shopper's name, used to greet them and in the reset email. |
+| `email` | Their log-in name. One email = one account. Saved in lower case. |
+| `password_hash` | A one-way scramble of the password. **The password itself is never stored, logged, emailed or sent back by the API.** |
+| `created_at` | When the account was made. |
+
+Two small tables were added for log-in safety. Neither one holds a password.
+
+| Table | Fields | Why |
+|---|---|---|
+| `login_failures` | `email`, `count`, `last_failed_at` | Counts wrong passwords in a row so the shopper can be prompted after 3. Cleared on a good log-in or a password change. |
+| `password_resets` | `user_id`, `token_hash`, `expires_at`, `used_at`, `created_at` | One row per reset link. Only a SHA-256 hash of the link's code is saved, so someone reading the database can't use it. A link works once and only for 30 minutes. |
+
+## How passwords are protected
+
+- **Hash settings (same for sign-up, log-in and reset):** PBKDF2-HMAC-SHA256, 120,000 iterations, a
+  random salt for every account, stored as `pbkdf2_sha256$salt$hash`. These are the settings the seeded
+  users already use, so the seeded test user and brand-new accounts both log in.
+- **Log-in check:** the backend never un-hashes anything. It reads the salt out of the stored string
+  (the middle piece), hashes what the shopper typed with that same salt and 120,000 iterations, and
+  compares the two with `hmac.compare_digest` (a constant-time compare, so timing gives nothing away).
+- **Unknown emails:** the backend still runs a hash for an email with no account, and gives the same
+  "Incorrect email or password." message, so nobody can tell which emails have accounts.
+- **Older test accounts:** two accounts made by an earlier version of my code stored the iteration count
+  as an extra piece. They still log in, and are re-saved in the standard format the first time they do.
+- **Sessions:** after a good log-in the shopper gets a signed token (`user_id.expiry.signature`, HMAC-SHA256,
+  7 days). The token has no password in it. The browser keeps the token, never the password.
+
+## On the screen
+
+- Every password box (Log in, Create account, Choose a new password) hides what is typed. An **eye icon**
+  inside the box lets the shopper show or hide the password (`frontend/src/components/PasswordInput.tsx`).
+- Password boxes always start **empty**. The site never fills them in, sets `autocomplete="off"` so the
+  browser shouldn't either, and clears the box after a wrong try.
+
+## After 3 failed log-ins
+
+1. Each wrong password for an email adds 1 to `login_failures`.
+2. On the 3rd miss in a row, the log-in page shows **"Please change your password"** with the message that
+   a reset link was sent to the email address on file, plus a link to send a new one.
+3. At the same time `auth.py` makes a one-time reset link and `mailer.py` emails it to the address saved
+   in `users` (never to an address typed on the page). The message on screen is the same whether or not the
+   email has an account, and an email is only sent when it does.
+4. The link opens `/reset-password?token=...`. The shopper types a new password twice (with the eye icon),
+   and `POST /api/password-reset/confirm` saves the new hash, uses up the link and clears the failure count.
+5. "Forgot password?" on the log-in page sends the same kind of link at any time.
+
+**How the email is sent:** with SMTP settings in `backend/.env` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASSWORD`, `SMTP_FROM`; see `.env.example`) the email goes to the shopper's inbox. Without them, for
+example on a grader's laptop, the email is saved as a `.eml` file in `backend/logs/outbox/` so the link can
+still be opened and tested. That folder is in `.gitignore`. `SITE_URL` sets the web address used in the link
+(default `http://localhost:5173`).
+
+Tests: `backend/tests/test_auth.py` (hash settings, seeded-style log-in, 3-miss prompt and email, reset link
+works once, expired and made-up links refused, eye toggle and empty password boxes).
 
 # Automatic tests that keep the data honest
 
