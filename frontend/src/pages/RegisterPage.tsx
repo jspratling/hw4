@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { errorMessage } from '../auth'
+import PasswordInput from '../components/PasswordInput'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -86,10 +87,8 @@ export default function RegisterPage() {
         </label>
         <label>
           Password
-          <input
-            type="password"
+          <PasswordInput
             name="password"
-            autoComplete="new-password"
             minLength={MIN_PASSWORD_LENGTH}
             value={form.password}
             onChange={update('password')}
@@ -99,10 +98,8 @@ export default function RegisterPage() {
         </label>
         <label>
           Confirm password
-          <input
-            type="password"
+          <PasswordInput
             name="confirm_password"
-            autoComplete="new-password"
             value={form.confirm_password}
             onChange={update('confirm_password')}
             aria-invalid={passwordsMismatch}
